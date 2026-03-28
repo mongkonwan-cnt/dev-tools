@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Code2, Settings } from "lucide-react";
-import { navSections } from "@/app/config/navigation";
+import { navSections } from "@/config/navigation";
 
 export function AppSidebar() {
   const pathname = usePathname();

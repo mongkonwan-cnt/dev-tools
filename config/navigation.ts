@@ -22,16 +22,16 @@ export const navSections: NavSection[] = [
   {
     label: "Tools",
     items: [
-      { title: "JSON Formatter", url: "/json-formatter", icon: FileJson },
-      { title: "Base64 Encoder", url: "/base64", icon: Hash },
-      { title: "Git Helper", url: "/git-helper", icon: GitBranch },
-      { title: "Code Snippet", url: "/snippets", icon: Code2 },
+      { title: "JSON Formatter", url: "/tools/json-formatter", icon: FileJson },
+      { title: "Base64 Encoder", url: "/tools/base64", icon: Hash },
+      { title: "Git Helper", url: "/tools/git-helper", icon: GitBranch },
+      { title: "Code Snippet", url: "/tools/snippets", icon: Code2 },
     ],
   },
   {
     label: "System",
     items: [
-      { title: "Terminal", url: "/terminal", icon: Terminal },
+      { title: "Terminal", url: "/tools/terminal", icon: Terminal },
     ],
   },
 ];

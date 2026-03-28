@@ -1,6 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
-import { navSections } from "@/app/config/navigation";
+import { navSections } from "@/config/navigation";
 
 export default function HomePage() {
   const toolSections = navSections.filter((section) => section.label !== "General");
