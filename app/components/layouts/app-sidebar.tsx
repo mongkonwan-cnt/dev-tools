@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
   Sidebar,
   SidebarContent,
@@ -13,33 +14,12 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Code2, FileJson, GitBranch, Hash, Home, Settings, Terminal } from "lucide-react";
-
-const navSections = [
-  {
-    label: "General",
-    items: [
-      { title: "Home", url: "/", icon: Home },
-    ],
-  },
-  {
-    label: "Tools",
-    items: [
-      { title: "JSON Formatter", url: "/json-formatter", icon: FileJson },
-      { title: "Base64 Encoder", url: "/base64", icon: Hash },
-      { title: "Git Helper", url: "/git-helper", icon: GitBranch },
-      { title: "Code Snippet", url: "/snippets", icon: Code2 },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { title: "Terminal", url: "/terminal", icon: Terminal },
-    ],
-  },
-];
+import { Code2, Settings } from "lucide-react";
+import { navSections } from "@/app/config/navigation";
 
 export function AppSidebar() {
+  const pathname = usePathname();
+
   return (
     <Sidebar>
       <SidebarHeader className="border-b px-4 py-3">
@@ -61,7 +41,11 @@ export function AppSidebar() {
               <SidebarMenu className="gap-0.5">
                 {section.items.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton render={<a href={item.url} />} className="text-sm py-3">
+                    <SidebarMenuButton
+                      render={<a href={item.url} />}
+                      isActive={pathname === item.url}
+                      className="text-sm py-3"
+                    >
                       <item.icon className="h-4 w-4 shrink-0" />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
