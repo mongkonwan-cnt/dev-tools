@@ -1,28 +1,41 @@
 "use client";
 
 type DiffLine =
-  | { type: "equal"; lineNumber: number; text: string }
-  | { type: "removed"; lineNumber: number; text: string; wordDiff?: WordChunk[] }
-  | { type: "added"; lineNumber: number; text: string; wordDiff?: WordChunk[] };
+  | { type: "equal"; leftLineNumber: number; rightLineNumber: number; text: string }
+  | { type: "removed"; leftLineNumber: number; text: string; wordDiff?: WordChunk[] }
+  | { type: "added"; rightLineNumber: number; text: string; wordDiff?: WordChunk[] };
 
 type WordChunk = { text: string; changed: boolean };
+
+type SideBySideRow =
+  | { kind: "equal"; leftLineNumber: number; rightLineNumber: number; text: string }
+  | {
+      kind: "changed";
+      leftLineNumber: number;
+      rightLineNumber: number;
+      leftText: string;
+      rightText: string;
+      leftWordDiff?: WordChunk[];
+      rightWordDiff?: WordChunk[];
+    }
+  | { kind: "removed"; leftLineNumber: number; text: string; wordDiff?: WordChunk[] }
+  | { kind: "added"; rightLineNumber: number; text: string; wordDiff?: WordChunk[] };
 
 type TextCompareDiffPanelProps = {
   leftText: string;
   rightText: string;
 };
 
-// LCS over word tokens to find word-level differences
 function computeWordDiff(leftText: string, rightText: string): { leftChunks: WordChunk[]; rightChunks: WordChunk[] } {
-  const leftWords = leftText.split(/(\s+)/);
-  const rightWords = rightText.split(/(\s+)/);
-  const leftLen = leftWords.length;
-  const rightLen = rightWords.length;
+  const leftChars = Array.from(leftText);
+  const rightChars = Array.from(rightText);
+  const leftLen = leftChars.length;
+  const rightLen = rightChars.length;
 
   const lcsTable = Array.from({ length: leftLen + 1 }, () => new Array(rightLen + 1).fill(0));
   for (let i = 1; i <= leftLen; i++) {
     for (let j = 1; j <= rightLen; j++) {
-      if (leftWords[i - 1] === rightWords[j - 1]) {
+      if (leftChars[i - 1] === rightChars[j - 1]) {
         lcsTable[i][j] = lcsTable[i - 1][j - 1] + 1;
       } else {
         lcsTable[i][j] = Math.max(lcsTable[i - 1][j], lcsTable[i][j - 1]);
@@ -30,32 +43,44 @@ function computeWordDiff(leftText: string, rightText: string): { leftChunks: Wor
     }
   }
 
-  const leftChunks: WordChunk[] = [];
-  const rightChunks: WordChunk[] = [];
   let i = leftLen;
   let j = rightLen;
   const leftStack: WordChunk[] = [];
   const rightStack: WordChunk[] = [];
 
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && leftWords[i - 1] === rightWords[j - 1]) {
-      leftStack.push({ text: leftWords[i - 1], changed: false });
-      rightStack.push({ text: rightWords[j - 1], changed: false });
-      i--;
-      j--;
+    if (i > 0 && j > 0 && leftChars[i - 1] === rightChars[j - 1]) {
+      leftStack.push({ text: leftChars[i - 1], changed: false });
+      rightStack.push({ text: rightChars[j - 1], changed: false });
+      i--; j--;
     } else if (j > 0 && (i === 0 || lcsTable[i][j - 1] >= lcsTable[i - 1][j])) {
-      rightStack.push({ text: rightWords[j - 1], changed: true });
+      rightStack.push({ text: rightChars[j - 1], changed: true });
       j--;
     } else {
-      leftStack.push({ text: leftWords[i - 1], changed: true });
+      leftStack.push({ text: leftChars[i - 1], changed: true });
       i--;
     }
   }
 
   return {
-    leftChunks: leftStack.reverse(),
-    rightChunks: rightStack.reverse(),
+    leftChunks: mergeAdjacentChunks(leftStack.reverse()),
+    rightChunks: mergeAdjacentChunks(rightStack.reverse()),
   };
+}
+
+function mergeAdjacentChunks(chunks: WordChunk[]): WordChunk[] {
+  if (chunks.length === 0) return [];
+  const merged: WordChunk[] = [{ ...chunks[0] }];
+  for (let i = 1; i < chunks.length; i++) {
+    const previous = merged[merged.length - 1];
+    const current = chunks[i];
+    if (previous.changed === current.changed) {
+      previous.text += current.text;
+    } else {
+      merged.push({ ...current });
+    }
+  }
+  return merged;
 }
 
 function computeDiff(leftText: string, rightText: string): DiffLine[] {
@@ -67,7 +92,6 @@ function computeDiff(leftText: string, rightText: string): DiffLine[] {
   const lcsTable = Array.from({ length: leftLength + 1 }, () =>
     new Array(rightLength + 1).fill(0)
   );
-
   for (let i = 1; i <= leftLength; i++) {
     for (let j = 1; j <= rightLength; j++) {
       if (leftLines[i - 1] === rightLines[j - 1]) {
@@ -86,32 +110,27 @@ function computeDiff(leftText: string, rightText: string): DiffLine[] {
 
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && leftLines[i - 1] === rightLines[j - 1]) {
-      stack.push({ type: "equal", lineNumber: leftLineNumber, text: leftLines[i - 1] });
-      i--;
-      j--;
-      leftLineNumber--;
-      rightLineNumber--;
+      stack.push({ type: "equal", leftLineNumber, rightLineNumber, text: leftLines[i - 1] });
+      i--; j--; leftLineNumber--; rightLineNumber--;
     } else if (j > 0 && (i === 0 || lcsTable[i][j - 1] >= lcsTable[i - 1][j])) {
-      stack.push({ type: "added", lineNumber: rightLineNumber, text: rightLines[j - 1] });
-      j--;
-      rightLineNumber--;
+      stack.push({ type: "added", rightLineNumber, text: rightLines[j - 1] });
+      j--; rightLineNumber--;
     } else {
-      stack.push({ type: "removed", lineNumber: leftLineNumber, text: leftLines[i - 1] });
-      i--;
-      leftLineNumber--;
+      stack.push({ type: "removed", leftLineNumber, text: leftLines[i - 1] });
+      i--; leftLineNumber--;
     }
   }
 
   const diffLines = stack.reverse();
 
-  // Pair adjacent removed+added lines and compute word-level diff
+  // Pair adjacent removed+added lines for word-level diff
   for (let idx = 0; idx < diffLines.length - 1; idx++) {
     const current = diffLines[idx];
     const next = diffLines[idx + 1];
     if (current.type === "removed" && next.type === "added") {
       const { leftChunks, rightChunks } = computeWordDiff(current.text, next.text);
-      (current as DiffLine & { type: "removed" }).wordDiff = leftChunks;
-      (next as DiffLine & { type: "added" }).wordDiff = rightChunks;
+      (current as Extract<DiffLine, { type: "removed" }>).wordDiff = leftChunks;
+      (next as Extract<DiffLine, { type: "added" }>).wordDiff = rightChunks;
       idx++;
     }
   }
@@ -119,25 +138,154 @@ function computeDiff(leftText: string, rightText: string): DiffLine[] {
   return diffLines;
 }
 
-function renderWordDiff(chunks: WordChunk[], isRemoved: boolean) {
+function buildSideBySideRows(diffLines: DiffLine[]): SideBySideRow[] {
+  const rows: SideBySideRow[] = [];
+  let idx = 0;
+  while (idx < diffLines.length) {
+    const current = diffLines[idx];
+    const next = diffLines[idx + 1];
+
+    if (current.type === "equal") {
+      rows.push({ kind: "equal", leftLineNumber: current.leftLineNumber, rightLineNumber: current.rightLineNumber, text: current.text });
+      idx++;
+    } else if (current.type === "removed" && next?.type === "added") {
+      rows.push({
+        kind: "changed",
+        leftLineNumber: current.leftLineNumber,
+        rightLineNumber: next.rightLineNumber,
+        leftText: current.text,
+        rightText: next.text,
+        leftWordDiff: current.wordDiff,
+        rightWordDiff: next.wordDiff,
+      });
+      idx += 2;
+    } else if (current.type === "removed") {
+      rows.push({ kind: "removed", leftLineNumber: current.leftLineNumber, text: current.text, wordDiff: current.wordDiff });
+      idx++;
+    } else if (current.type === "added") {
+      rows.push({ kind: "added", rightLineNumber: current.rightLineNumber, text: current.text, wordDiff: current.wordDiff });
+      idx++;
+    } else {
+      idx++;
+    }
+  }
+  return rows;
+}
+
+function renderChunks(chunks: WordChunk[], isRemoved: boolean) {
   return chunks.map((chunk, index) => {
     if (!chunk.changed) {
-      return <span key={index}>{chunk.text}</span>;
+      return (
+        <span key={index} className="text-foreground/85">
+          {chunk.text}
+        </span>
+      );
     }
-    const highlightClass = isRemoved
-      ? "bg-red-300/60 dark:bg-red-700/50 rounded-sm"
-      : "bg-green-300/60 dark:bg-green-700/50 rounded-sm";
+
+    const changedClass = isRemoved
+      ? "bg-red-300/50 dark:bg-red-700/40 text-red-950 dark:text-red-100 font-semibold underline decoration-red-500/50 rounded-sm px-0.5"
+      : "bg-green-300/50 dark:bg-green-700/40 text-green-950 dark:text-green-100 font-semibold underline decoration-green-500/50 rounded-sm px-0.5";
+
     return (
-      <span key={index} className={highlightClass}>
+      <span key={index} className={changedClass}>
         {chunk.text}
       </span>
     );
   });
 }
 
+function getMarker(kind: SideBySideRow["kind"]): string {
+  if (kind === "removed") return "-";
+  if (kind === "added") return "+";
+  if (kind === "changed") return "~";
+  return " ";
+}
+
+function getRowBackground(kind: SideBySideRow["kind"], side: "left" | "right"): string {
+  if (kind === "equal") {
+    return "bg-background";
+  }
+
+  if (kind === "changed") {
+    return side === "left"
+      ? "bg-red-50/70 dark:bg-red-950/30"
+      : "bg-green-50/70 dark:bg-green-950/30";
+  }
+
+  if (kind === "removed") {
+    return side === "left"
+      ? "bg-red-50/70 dark:bg-red-950/30"
+      : "bg-muted/20";
+  }
+
+  return side === "left"
+    ? "bg-muted/20"
+    : "bg-green-50/70 dark:bg-green-950/30";
+}
+
+const markerClass =
+  "w-8 shrink-0 border-r text-center text-xs select-none flex items-center justify-center";
+
+const lineNumberClass =
+  "w-12 shrink-0 border-r px-2 text-right text-xs text-muted-foreground tabular-nums flex items-center justify-end";
+
+const textClass =
+  "flex-1 min-w-0 px-3 py-1 whitespace-pre overflow-x-auto font-mono text-sm leading-6";
+
+function EmptyCell() {
+  return (
+    <div className="flex flex-1 min-w-0 items-center">
+      <span className={markerClass} />
+      <span className={lineNumberClass} />
+      <span className={`${textClass} text-muted-foreground/30 italic`}>·</span>
+    </div>
+  );
+}
+
+function DiffCell(props: {
+  side: "left" | "right";
+  rowKind: SideBySideRow["kind"];
+  lineNumber?: number;
+  text?: string;
+  chunks?: WordChunk[];
+  isRemoved?: boolean;
+}) {
+  const { side, rowKind, lineNumber, text, chunks, isRemoved } = props;
+
+  const marker =
+    rowKind === "equal"
+      ? " "
+      : rowKind === "changed"
+      ? "~"
+      : rowKind === "removed" && side === "left"
+      ? "-"
+      : rowKind === "added" && side === "right"
+      ? "+"
+      : " ";
+
+  const markerColor =
+    marker === "-"
+      ? "text-red-500"
+      : marker === "+"
+      ? "text-green-600"
+      : marker === "~"
+      ? "text-amber-500"
+      : "text-muted-foreground/40";
+
+  return (
+    <div className="flex flex-1 min-w-0 items-stretch">
+      <span className={`${markerClass} ${markerColor}`}>{marker}</span>
+      <span className={lineNumberClass}>{lineNumber ?? ""}</span>
+      <span className={textClass}>
+        {chunks ? renderChunks(chunks, Boolean(isRemoved)) : (text || " ")}
+      </span>
+    </div>
+  );
+}
+
 export function TextCompareDiffPanel({ leftText, rightText }: TextCompareDiffPanelProps) {
   const diffLines = computeDiff(leftText, rightText);
-
+  const rows = buildSideBySideRows(diffLines);
   const removedCount = diffLines.filter((line) => line.type === "removed").length;
   const addedCount = diffLines.filter((line) => line.type === "added").length;
   const isIdentical = removedCount === 0 && addedCount === 0;
@@ -145,66 +293,108 @@ export function TextCompareDiffPanel({ leftText, rightText }: TextCompareDiffPan
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Diff Result
         </label>
+
         <div className="flex items-center gap-3 text-xs">
           {isIdentical ? (
             <span className="text-muted-foreground">Texts are identical</span>
           ) : (
             <>
-              <span className="text-red-500 dark:text-red-400">− {removedCount} removed</span>
-              <span className="text-green-600 dark:text-green-400">+ {addedCount} added</span>
+              <span className="text-red-500">− {removedCount} removed</span>
+              <span className="text-green-600">+ {addedCount} added</span>
             </>
           )}
         </div>
       </div>
 
-      <div className="rounded-lg border overflow-auto max-h-80 bg-muted/30">
-        <table className="w-full text-sm font-mono border-collapse">
-          <tbody>
-            {diffLines.map((line, index) => {
-              const isRemoved = line.type === "removed";
-              const isAdded = line.type === "added";
+      <div className="overflow-hidden rounded-xl border bg-background">
+        <div className="grid grid-cols-2 border-b bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="border-r px-4 py-2">Original</div>
+          <div className="px-4 py-2">Modified</div>
+        </div>
 
-              const rowClass = isRemoved
-                ? "bg-red-50 dark:bg-red-950/40"
-                : isAdded
-                ? "bg-green-50 dark:bg-green-950/40"
-                : "";
+        <div className="max-h-[32rem] overflow-auto">
+          {rows.map((row, index) => {
+            return (
+              <div
+                key={index}
+                className="flex border-b last:border-b-0"
+              >
+                <div className={`flex flex-1 min-w-0 border-r ${getRowBackground(row.kind, "left")}`}>
+                  {row.kind === "equal" && (
+                    <DiffCell
+                      side="left"
+                      rowKind="equal"
+                      lineNumber={row.leftLineNumber}
+                      text={row.text}
+                    />
+                  )}
 
-              const prefixClass = isRemoved
-                ? "text-red-500 dark:text-red-400 select-none"
-                : isAdded
-                ? "text-green-600 dark:text-green-400 select-none"
-                : "text-muted-foreground select-none";
+                  {row.kind === "changed" && (
+                    <DiffCell
+                      side="left"
+                      rowKind="changed"
+                      lineNumber={row.leftLineNumber}
+                      text={row.leftText}
+                      chunks={row.leftWordDiff}
+                      isRemoved={true}
+                    />
+                  )}
 
-              const prefix = isRemoved ? "−" : isAdded ? "+" : " ";
+                  {row.kind === "removed" && (
+                    <DiffCell
+                      side="left"
+                      rowKind="removed"
+                      lineNumber={row.leftLineNumber}
+                      text={row.text}
+                      chunks={row.wordDiff}
+                      isRemoved={true}
+                    />
+                  )}
 
-              const textClass = isRemoved
-                ? "text-red-700 dark:text-red-300"
-                : isAdded
-                ? "text-green-700 dark:text-green-300"
-                : "";
+                  {row.kind === "added" && <EmptyCell />}
+                </div>
 
-              const wordDiff = (line as { wordDiff?: WordChunk[] }).wordDiff;
+                <div className={`flex flex-1 min-w-0 ${getRowBackground(row.kind, "right")}`}>
+                  {row.kind === "equal" && (
+                    <DiffCell
+                      side="right"
+                      rowKind="equal"
+                      lineNumber={row.rightLineNumber}
+                      text={row.text}
+                    />
+                  )}
 
-              return (
-                <tr key={index} className={rowClass}>
-                  <td className={`px-3 py-0.5 w-8 text-right text-xs ${prefixClass}`}>
-                    {line.lineNumber}
-                  </td>
-                  <td className={`px-2 py-0.5 w-4 text-center ${prefixClass}`}>{prefix}</td>
-                  <td className={`px-3 py-0.5 whitespace-pre ${textClass}`}>
-                    {wordDiff
-                      ? renderWordDiff(wordDiff, isRemoved)
-                      : (line.text || " ")}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  {row.kind === "changed" && (
+                    <DiffCell
+                      side="right"
+                      rowKind="changed"
+                      lineNumber={row.rightLineNumber}
+                      text={row.rightText}
+                      chunks={row.rightWordDiff}
+                      isRemoved={false}
+                    />
+                  )}
+
+                  {row.kind === "added" && (
+                    <DiffCell
+                      side="right"
+                      rowKind="added"
+                      lineNumber={row.rightLineNumber}
+                      text={row.text}
+                      chunks={row.wordDiff}
+                      isRemoved={false}
+                    />
+                  )}
+
+                  {row.kind === "removed" && <EmptyCell />}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
