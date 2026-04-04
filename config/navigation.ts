@@ -1,4 +1,4 @@
-import { Code2, FileJson, GitBranch, Hash, Home, Terminal } from "lucide-react";
+import { Code2, FileJson, GitBranch, GitCompareArrows, Hash, Home, Terminal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type NavItem = {
@@ -23,6 +23,7 @@ export const navSections: NavSection[] = [
     label: "Tools",
     items: [
       { title: "JSON Formatter", url: "/tools/json-formatter", icon: FileJson },
+      { title: "Text Compare", url: "/tools/text-compare", icon: GitCompareArrows },
       { title: "Base64 Encoder", url: "/tools/base64", icon: Hash },
       { title: "Git Helper", url: "/tools/git-helper", icon: GitBranch },
       { title: "Code Snippet", url: "/tools/snippets", icon: Code2 },
