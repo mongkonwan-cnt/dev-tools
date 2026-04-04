@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { GitCompareArrows } from "lucide-react";
-import { TextCompareActionBar } from "./_components/text-compare-action-bar";
+import { GitCompareArrows, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { TextCompareInputPanel } from "./_components/text-compare-input-panel";
 import { TextCompareDiffPanel } from "./_components/text-compare-diff-panel";
 
@@ -26,6 +26,13 @@ export default function TextComparePage() {
   const [hasCompared, setHasCompared] = useState(false);
 
   function compare() {
+    if(!leftValue && !rightValue) {
+      setDiffLeft("");
+      setDiffRight("");
+      setHasCompared(false);
+      return;
+    }
+
     setDiffLeft(leftValue);
     setDiffRight(rightValue);
     setHasCompared(true);
@@ -49,13 +56,24 @@ export default function TextComparePage() {
 
   return (
     <div className="flex flex-col gap-6 h-full">
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <GitCompareArrows className="h-5 w-5" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <GitCompareArrows className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold leading-none">Text Compare</h1>
+            <p className="text-sm text-muted-foreground mt-1">Compare two pieces of text side by side</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-lg font-semibold leading-none">Text Compare</h1>
-          <p className="text-sm text-muted-foreground mt-1">Compare two pieces of text side by side</p>
+        <div className="flex items-center gap-2">
+          <Button onClick={loadExample} variant="outline" size="sm">
+            Load Example
+          </Button>
+          <Button onClick={clearAll} variant="ghost" size="sm" className="text-muted-foreground">
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+            Clear
+          </Button>
         </div>
       </div>
 
@@ -63,17 +81,12 @@ export default function TextComparePage() {
         <TextCompareDiffPanel leftText={diffLeft} rightText={diffRight} />
       )}
 
-      <TextCompareActionBar
-        onCompare={compare}
-        onLoadExample={loadExample}
-        onClear={clearAll}
-      />
-
       <TextCompareInputPanel
         leftValue={leftValue}
         rightValue={rightValue}
         onLeftChange={setLeftValue}
         onRightChange={setRightValue}
+        onCompare={compare}
       />
 
     </div>

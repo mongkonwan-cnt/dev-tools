@@ -2,19 +2,65 @@
 
 type DiffLine =
   | { type: "equal"; lineNumber: number; text: string }
-  | { type: "removed"; lineNumber: number; text: string }
-  | { type: "added"; lineNumber: number; text: string };
+  | { type: "removed"; lineNumber: number; text: string; wordDiff?: WordChunk[] }
+  | { type: "added"; lineNumber: number; text: string; wordDiff?: WordChunk[] };
+
+type WordChunk = { text: string; changed: boolean };
 
 type TextCompareDiffPanelProps = {
   leftText: string;
   rightText: string;
 };
 
+// LCS over word tokens to find word-level differences
+function computeWordDiff(leftText: string, rightText: string): { leftChunks: WordChunk[]; rightChunks: WordChunk[] } {
+  const leftWords = leftText.split(/(\s+)/);
+  const rightWords = rightText.split(/(\s+)/);
+  const leftLen = leftWords.length;
+  const rightLen = rightWords.length;
+
+  const lcsTable = Array.from({ length: leftLen + 1 }, () => new Array(rightLen + 1).fill(0));
+  for (let i = 1; i <= leftLen; i++) {
+    for (let j = 1; j <= rightLen; j++) {
+      if (leftWords[i - 1] === rightWords[j - 1]) {
+        lcsTable[i][j] = lcsTable[i - 1][j - 1] + 1;
+      } else {
+        lcsTable[i][j] = Math.max(lcsTable[i - 1][j], lcsTable[i][j - 1]);
+      }
+    }
+  }
+
+  const leftChunks: WordChunk[] = [];
+  const rightChunks: WordChunk[] = [];
+  let i = leftLen;
+  let j = rightLen;
+  const leftStack: WordChunk[] = [];
+  const rightStack: WordChunk[] = [];
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && leftWords[i - 1] === rightWords[j - 1]) {
+      leftStack.push({ text: leftWords[i - 1], changed: false });
+      rightStack.push({ text: rightWords[j - 1], changed: false });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || lcsTable[i][j - 1] >= lcsTable[i - 1][j])) {
+      rightStack.push({ text: rightWords[j - 1], changed: true });
+      j--;
+    } else {
+      leftStack.push({ text: leftWords[i - 1], changed: true });
+      i--;
+    }
+  }
+
+  return {
+    leftChunks: leftStack.reverse(),
+    rightChunks: rightStack.reverse(),
+  };
+}
+
 function computeDiff(leftText: string, rightText: string): DiffLine[] {
   const leftLines = leftText.split("\n");
   const rightLines = rightText.split("\n");
-
-  // LCS-based diff using dynamic programming
   const leftLength = leftLines.length;
   const rightLength = rightLines.length;
 
@@ -32,12 +78,10 @@ function computeDiff(leftText: string, rightText: string): DiffLine[] {
     }
   }
 
-  const result: DiffLine[] = [];
   let i = leftLength;
   let j = rightLength;
   let leftLineNumber = leftLength;
   let rightLineNumber = rightLength;
-
   const stack: DiffLine[] = [];
 
   while (i > 0 || j > 0) {
@@ -58,13 +102,41 @@ function computeDiff(leftText: string, rightText: string): DiffLine[] {
     }
   }
 
-  return stack.reverse();
+  const diffLines = stack.reverse();
+
+  // Pair adjacent removed+added lines and compute word-level diff
+  for (let idx = 0; idx < diffLines.length - 1; idx++) {
+    const current = diffLines[idx];
+    const next = diffLines[idx + 1];
+    if (current.type === "removed" && next.type === "added") {
+      const { leftChunks, rightChunks } = computeWordDiff(current.text, next.text);
+      (current as DiffLine & { type: "removed" }).wordDiff = leftChunks;
+      (next as DiffLine & { type: "added" }).wordDiff = rightChunks;
+      idx++;
+    }
+  }
+
+  return diffLines;
+}
+
+function renderWordDiff(chunks: WordChunk[], isRemoved: boolean) {
+  return chunks.map((chunk, index) => {
+    if (!chunk.changed) {
+      return <span key={index}>{chunk.text}</span>;
+    }
+    const highlightClass = isRemoved
+      ? "bg-red-300/60 dark:bg-red-700/50 rounded-sm"
+      : "bg-green-300/60 dark:bg-green-700/50 rounded-sm";
+    return (
+      <span key={index} className={highlightClass}>
+        {chunk.text}
+      </span>
+    );
+  });
 }
 
 export function TextCompareDiffPanel({ leftText, rightText }: TextCompareDiffPanelProps) {
   const diffLines = computeDiff(leftText, rightText);
-
-  console.log({ diffLines });
 
   const removedCount = diffLines.filter((line) => line.type === "removed").length;
   const addedCount = diffLines.filter((line) => line.type === "added").length;
@@ -115,6 +187,8 @@ export function TextCompareDiffPanel({ leftText, rightText }: TextCompareDiffPan
                 ? "text-green-700 dark:text-green-300"
                 : "";
 
+              const wordDiff = (line as { wordDiff?: WordChunk[] }).wordDiff;
+
               return (
                 <tr key={index} className={rowClass}>
                   <td className={`px-3 py-0.5 w-8 text-right text-xs ${prefixClass}`}>
@@ -122,7 +196,9 @@ export function TextCompareDiffPanel({ leftText, rightText }: TextCompareDiffPan
                   </td>
                   <td className={`px-2 py-0.5 w-4 text-center ${prefixClass}`}>{prefix}</td>
                   <td className={`px-3 py-0.5 whitespace-pre ${textClass}`}>
-                    {line.text || " "}
+                    {wordDiff
+                      ? renderWordDiff(wordDiff, isRemoved)
+                      : (line.text || " ")}
                   </td>
                 </tr>
               );

@@ -1,10 +1,14 @@
 "use client";
 
+import { GitCompareArrows } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
 type TextCompareInputPanelProps = {
   leftValue: string;
   rightValue: string;
   onLeftChange: (value: string) => void;
   onRightChange: (value: string) => void;
+  onCompare: () => void;
 };
 
 export function TextCompareInputPanel({
@@ -12,10 +16,11 @@ export function TextCompareInputPanel({
   rightValue,
   onLeftChange,
   onRightChange,
+  onCompare,
 }: TextCompareInputPanelProps) {
   return (
-    <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
-      <div className="flex flex-col gap-2 min-h-0">
+    <div className="flex gap-3 flex-1 min-h-0">
+      <div className="flex flex-col gap-2 flex-1 min-h-0">
         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Original
         </label>
@@ -28,7 +33,15 @@ export function TextCompareInputPanel({
         />
       </div>
 
-      <div className="flex flex-col gap-2 min-h-0">
+      {/* Center Compare button */}
+      <div className="flex flex-col items-center justify-center gap-2 pt-6 shrink-0">
+        <Button onClick={onCompare} size="sm" className="flex flex-col h-auto py-3 px-3 gap-1.5">
+          <GitCompareArrows className="h-4 w-4" />
+          <span className="text-xs">Compare</span>
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-2 flex-1 min-h-0">
         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Modified
         </label>
